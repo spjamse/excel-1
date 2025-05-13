@@ -1,0 +1,172 @@
+Sub 匯出並更新分派任務清單()
+
+    Dim wsData As Worksheet
+    Dim wbTotal As Workbook
+    Dim wsTotal As Worksheet, wsAll As Worksheet
+    Dim sourceLastRow As Long, targetLastRow As Long
+    Dim sourceRow As Long, col As Long
+    Dim headerDictSrc As Object, headerDictDst As Object
+    Dim sourceHeader As Variant, targetHeader As Variant
+    Dim 編碼欄Src As Long, 編碼欄Dst As Long, matchRow As Long
+    Dim 編碼值 As String
+    Dim nowday As String
+    Dim totalPath As String
+    Dim matchFound As Boolean
+
+nowday = Format(Now, "yyyymmdd")
+
+    ' 設定來源
+    Set wsData = ActiveSheet
+    sourceLastRow = wsData.Cells(wsData.Rows.Count, 1).End(xlUp).Row
+
+    ' 建立來源欄位對應字典
+    Set headerDictSrc = CreateObject("Scripting.Dictionary")
+    For col = 1 To wsData.Cells(2, Columns.Count).End(xlToLeft).Column
+        sourceHeader = Trim(wsData.Cells(2, col).Value)
+        If sourceHeader <> "" Then headerDictSrc(sourceHeader) = col
+    Next col
+
+    If Not headerDictSrc.exists("編碼") Then
+        MsgBox "來源表格中找不到欄位：編碼", vbCritical
+        Exit Sub
+    Else
+        編碼欄Src = headerDictSrc("編碼")
+    End If
+
+    If Not headerDictSrc.exists("預算") Then
+        MsgBox "來源表格中找不到欄位：預算", vbCritical
+        Exit Sub
+    Else
+        預算欄Src = headerDictSrc("預算")
+    End If
+
+    ' 自動補上缺少編碼的列
+    For sourceRow = 3 To sourceLastRow
+        編碼值 = Trim(wsData.Cells(sourceRow, 編碼欄Src).Value)
+
+        If 編碼值 = "" Then
+            Dim 產品名稱 As String, 內部編碼 As String, 需求日 As String
+
+            If headerDictSrc.exists("產品名稱") Then
+                產品名稱 = Trim(wsData.Cells(sourceRow, headerDictSrc("產品名稱")).Value)
+            Else
+                產品名稱 = "未指定"
+            End If
+
+            If headerDictSrc.exists("內部編碼") Then
+                內部編碼 = Trim(wsData.Cells(sourceRow, headerDictSrc("內部編碼")).Value)
+            Else
+                內部編碼 = "未指定"
+            End If
+
+            If headerDictSrc.exists("需求日") Then
+                If IsDate(wsData.Cells(sourceRow, headerDictSrc("需求日")).Value) Then
+                    需求日 = Format(wsData.Cells(sourceRow, headerDictSrc("需求日")).Value, "yyyymmdd")
+                Else
+                    需求日 = "未指定"
+                End If
+            Else
+                需求日 = "未指定"
+            End If
+
+            編碼值 = 產品名稱 & "-" & 內部編碼 & "-" & 需求日
+            wsData.Cells(sourceRow, 編碼欄Src).Value = 編碼值
+        End If
+    Next sourceRow
+
+    ' 開啟目標檔案
+    totalPath = ThisWorkbook.Path & "\分派任務表.xlsm"
+    Set wbTotal = Workbooks.Open(totalPath)
+    Set wsTotal = wbTotal.Sheets("待分派")
+    Set wsAll = wbTotal.Sheets("總資料")
+
+    ' 建立待分派工作表欄位對應字典
+    Set headerDictDst = CreateObject("Scripting.Dictionary")
+    For col = 1 To wsTotal.Cells(2, Columns.Count).End(xlToLeft).Column
+        targetHeader = Trim(wsTotal.Cells(2, col).Value)
+        If targetHeader <> "" Then headerDictDst(targetHeader) = col
+    Next col
+
+    If Not headerDictDst.exists("編碼") Then
+        MsgBox "分派任務表中找不到欄位：編碼", vbCritical
+        Exit Sub
+    Else
+        編碼欄Dst = headerDictDst("編碼")
+    End If
+
+    ' 建立總資料工作表欄位對應字典
+    Set headerDictAll = CreateObject("Scripting.Dictionary")
+    For col = 1 To wsAll.Cells(1, Columns.Count).End(xlToLeft).Column
+        targetHeader = Trim(wsAll.Cells(1, col).Value)
+        If targetHeader <> "" Then headerDictAll(targetHeader) = col
+    Next col
+
+    ' 匯出資料
+    For sourceRow = 3 To sourceLastRow
+        預算值 = Trim(wsData.Cells(sourceRow, 預算欄Src).Value)
+
+        If 預算值 <> "" And 預算值 <> "待估預算" Then
+            編碼值 = Trim(wsData.Cells(sourceRow, 編碼欄Src).Value)
+            matchFound = False
+            targetLastRow = wsTotal.Cells(wsTotal.Rows.Count, 1).End(xlUp).Row
+
+            For matchRow = 2 To targetLastRow
+                If Trim(wsTotal.Cells(matchRow, 編碼欄Dst).Value) = 編碼值 Then
+                    matchFound = True
+                    Exit For
+                End If
+            Next matchRow
+
+            If Not matchFound Then matchRow = targetLastRow + 1
+
+            For Each targetHeader In headerDictDst.Keys
+                If headerDictSrc.exists(targetHeader) Then
+                    On Error Resume Next
+                    wsTotal.Cells(matchRow, headerDictDst(targetHeader)).Value = _
+                        wsData.Cells(sourceRow, headerDictSrc(targetHeader)).Value
+                    On Error GoTo 0
+                End If
+            Next targetHeader
+
+            If headerDictDst.exists("上傳時間") Then
+                wsTotal.Cells(matchRow, headerDictDst("上傳時間")).Value = Now
+            End If
+        End If
+
+        ' === 總資料表 ===
+        Dim allMatchRow As Long, allMatchFound As Boolean
+        編碼值 = Trim(wsData.Cells(sourceRow, 編碼欄Src).Value)
+        allMatchFound = False
+        allLastRow = wsAll.Cells(wsAll.Rows.Count, 1).End(xlUp).Row
+
+        For allMatchRow = 2 To allLastRow
+            If Trim(wsAll.Cells(allMatchRow, 編碼欄Dst).Value) = 編碼值 Then
+                allMatchFound = True
+                Exit For
+            End If
+        Next allMatchRow
+
+        If Not allMatchFound Then allMatchRow = allLastRow + 1
+
+        For Each targetHeader In headerDictAll.Keys
+            If headerDictSrc.exists(targetHeader) Then
+                On Error Resume Next
+                wsAll.Cells(allMatchRow, headerDictAll(targetHeader)).Value = _
+                    wsData.Cells(sourceRow, headerDictSrc(targetHeader)).Value
+                On Error GoTo 0
+            End If
+        Next targetHeader
+
+        If headerDictAll.exists("上傳時間") Then
+            wsAll.Cells(allMatchRow, headerDictAll("上傳時間")).Value = Now
+        End If
+
+SkipRow:
+    Next sourceRow
+
+    wbTotal.Save
+    wbTotal.Close False
+
+    MsgBox "資料已新增或更新至分派任務表.xlsx", vbInformation
+
+End Sub
