@@ -1,0 +1,58 @@
+Sub 移動並清空_根據抬頭對應()
+    Dim ws來源 As Worksheet
+    Dim ws目標 As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim pasteRow As Long
+    Dim headerDict來源 As Object, headerDict目標 As Object
+    Dim i As Long, j As Long
+    Dim 欄位名稱 As Variant
+    Dim col來源 As Long, col目標 As Long
+
+    ' 使用中的來源表
+    Set ws來源 = ActiveSheet
+    Set ws目標 = ThisWorkbook.Sheets("歷史列表")
+
+    ' 找來源的最後列與欄
+    lastRow = ws來源.Cells(ws來源.Rows.Count, 1).End(xlUp).Row
+    lastCol = ws來源.Cells(2, Columns.Count).End(xlToLeft).Column ' 第2列為來源表頭
+
+    If lastRow < 3 Then
+        MsgBox "來源資料不足，無需搬移", vbExclamation
+        Exit Sub
+    End If
+
+    ' 建立來源欄位名稱對應（來源第2列為標題列）
+    Set headerDict來源 = CreateObject("Scripting.Dictionary")
+    For j = 1 To lastCol
+        欄位名稱 = Trim(ws來源.Cells(2, j).Value)
+        If 欄位名稱 <> "" Then headerDict來源(欄位名稱) = j
+    Next j
+
+    ' 建立目標欄位名稱對應（目標第1列為標題列）
+    Set headerDict目標 = CreateObject("Scripting.Dictionary")
+    For j = 1 To ws目標.Cells(2, Columns.Count).End(xlToLeft).Column
+        欄位名稱 = Trim(ws目標.Cells(2, j).Value)
+        If 欄位名稱 <> "" Then headerDict目標(欄位名稱) = j
+    Next j
+
+    ' 開始搬移資料
+    For i = 3 To lastRow
+        pasteRow = ws目標.Cells(ws目標.Rows.Count, 1).End(xlUp).Row + 1
+        If pasteRow < 3 Then pasteRow = 3
+
+        For Each 欄位名稱 In headerDict來源.Keys
+            If headerDict目標.exists(欄位名稱) Then
+                col來源 = headerDict來源(欄位名稱)
+                col目標 = headerDict目標(欄位名稱)
+
+                ws目標.Cells(pasteRow, col目標).Value = ws來源.Cells(i, col來源).Value
+            End If
+        Next 欄位名稱
+    Next i
+
+    ' 清除來源內容（保留標題）
+    ws來源.Range("3:" & lastRow).ClearContents
+
+    MsgBox "資料已依欄位名稱成功搬移至「歷史列表」並清除原始資料", vbInformation
+End Sub
+
