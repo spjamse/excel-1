@@ -1,0 +1,82 @@
+Sub 回傳至總資料表_執行中()
+    Dim wb總表 As Workbook
+    Dim ws總表 As Worksheet
+    Dim ws本表 As Worksheet
+    Dim headerDict總表 As Object, headerDict本表 As Object
+    Dim 檔案路徑 As String, 檔案名稱 As String
+    Dim lastRow本表 As Long, lastRow總表 As Long
+    Dim i As Long, j As Long
+    Dim matchRow As Long, 更新筆數 As Long
+    Dim 編碼值 As String
+    Dim 欄位 As Variant
+
+    ' 三個要更新的欄位
+    Dim 欲回傳欄位: 欲回傳欄位 = Array("設計完成圖", "組裝中", "已轉交")
+
+    ' 目前這個工程師檔案的主要工作表
+    Set ws本表 = ThisWorkbook.Sheets(1)
+    lastRow本表 = ws本表.Cells(ws本表.Rows.Count, 1).End(xlUp).Row
+
+    ' 開啟總資料表
+    檔案名稱 = "分派任務表.xlsm"
+    檔案路徑 = ThisWorkbook.Path & "\" & 檔案名稱
+
+    If Dir(檔案路徑) = "" Then
+        MsgBox "找不到總資料表檔案：" & 檔案名稱, vbCritical
+        Exit Sub
+    End If
+
+    Set wb總表 = Workbooks.Open(檔案路徑)
+    Set ws總表 = wb總表.Sheets("已分派")
+    lastRow總表 = ws總表.Cells(ws總表.Rows.Count, 1).End(xlUp).Row
+
+    ' 建立總表欄位對照
+    Set headerDict總表 = CreateObject("Scripting.Dictionary")
+    For j = 1 To ws總表.Cells(2, Columns.Count).End(xlToLeft).Column
+        headerDict總表(Trim(ws總表.Cells(2, j).Value)) = j
+    Next j
+
+    ' 建立本表欄位對照
+    Set headerDict本表 = CreateObject("Scripting.Dictionary")
+    For j = 1 To ws本表.Cells(2, Columns.Count).End(xlToLeft).Column
+        headerDict本表(Trim(ws本表.Cells(2, j).Value)) = j
+    Next j
+
+
+    ' 一筆筆對應編碼
+    更新筆數 = 0
+    For i = 3 To lastRow本表
+        編碼值 = Trim(ws本表.Cells(i, headerDict本表("編碼")).Value)
+        If 編碼值 = "" Then GoTo SkipRow
+
+        ' 找總表裡對應的編碼
+        matchRow = 0
+        For j = 2 To lastRow總表
+            If Trim(ws總表.Cells(j, headerDict總表("編碼")).Value) = 編碼值 Then
+                matchRow = j
+                Exit For
+            End If
+        Next j
+
+        If matchRow = 0 Then GoTo SkipRow ' 總表中找不到
+
+        ' 回傳三欄
+        For Each 欄位 In 欲回傳欄位
+            If headerDict本表.exists(欄位) And headerDict總表.exists(欄位) Then
+                ws總表.Cells(matchRow, headerDict總表(欄位)).Value = _
+                    ws本表.Cells(i, headerDict本表(欄位)).Value
+            End If
+        Next 欄位
+
+        更新筆數 = 更新筆數 + 1
+
+SkipRow:
+    Next i
+
+    wb總表.Save
+    wb總表.Close False
+
+    MsgBox "? 已成功將進度資料回傳至總資料表！\n更新筆數：" & 更新筆數, vbInformation
+End Sub
+
+
