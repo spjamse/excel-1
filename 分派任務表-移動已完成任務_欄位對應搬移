@@ -1,0 +1,72 @@
+Sub 移動已完成任務_欄位對應搬移()
+    Dim wsSource As Worksheet, wsTarget As Worksheet
+    Dim dictSource As Object, dictTarget As Object
+    Dim matchCols As Object
+    Dim lastRowSrc As Long, lastRowTgt As Long
+    Dim i As Long, newRow As Long
+    Dim col設計 As Long, col組裝 As Long, col轉交 As Long
+    Dim colName As Variant
+
+    Set wsSource = ThisWorkbook.Sheets("已分派")
+    Set wsTarget = ThisWorkbook.Sheets("已完成")
+    Set dictSource = CreateObject("Scripting.Dictionary")
+    Set dictTarget = CreateObject("Scripting.Dictionary")
+    Set matchCols = CreateObject("Scripting.Dictionary")
+
+    ' 讀取來源與目標表頭（第2列）
+    For i = 1 To wsSource.Cells(2, Columns.Count).End(xlToLeft).Column
+        If wsSource.Cells(2, i).Value <> "" Then
+            dictSource(wsSource.Cells(2, i).Value) = i
+        End If
+    Next i
+
+    For i = 1 To wsTarget.Cells(2, Columns.Count).End(xlToLeft).Column
+        If wsTarget.Cells(2, i).Value <> "" Then
+            dictTarget(wsTarget.Cells(2, i).Value) = i
+        End If
+    Next i
+
+    ' 確認必要欄位存在
+    If Not dictSource.exists("設計完成圖") Or _
+       Not dictSource.exists("組裝中") Or _
+       Not dictSource.exists("已轉交") Then
+        MsgBox "來源表缺少必要欄位：「設計完成圖」、「組裝中」、「已轉交」", vbExclamation
+        Exit Sub
+    End If
+
+    col設計 = dictSource("設計完成圖")
+    col組裝 = dictSource("組裝中")
+    col轉交 = dictSource("已轉交")
+
+    ' 建立欄位名稱對應（來源欄位對應到目標欄位）
+    For Each colName In dictSource.Keys
+        If dictTarget.exists(colName) Then
+            matchCols.Add colName, Array(dictSource(colName), dictTarget(colName))
+        End If
+    Next
+
+    lastRowSrc = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
+    lastRowTgt = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row
+    newRow = IIf(lastRowTgt < 3, 3, lastRowTgt + 1)
+
+    ' 從下往上逐列檢查搬移條件
+    For i = lastRowSrc To 3 Step -1
+        If LCase(Trim(wsSource.Cells(i, col設計).Value)) = "v" And _
+           LCase(Trim(wsSource.Cells(i, col組裝).Value)) = "v" And _
+           LCase(Trim(wsSource.Cells(i, col轉交).Value)) = "v" Then
+
+            ' 對應欄位搬移資料
+            For Each colName In matchCols.Keys
+                wsTarget.Cells(newRow, matchCols(colName)(1)).Value = wsSource.Cells(i, matchCols(colName)(0)).Value
+            Next colName
+
+            ' 刪除來源列
+            wsSource.Rows(i).Delete
+
+            ' 下一列寫入行號往下移
+            newRow = newRow + 1
+        End If
+    Next i
+
+    MsgBox "符合條件的資料已搬移到「已完成」。", vbInformation
+End Sub
