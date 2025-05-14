@@ -1,0 +1,73 @@
+Function GetHeaderDict(ws As Worksheet, headerRow As Long) As Object
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    Dim i As Long, colCount As Long
+    colCount = ws.Cells(headerRow, Columns.Count).End(xlToLeft).Column
+
+    For i = 1 To colCount
+        If ws.Cells(headerRow, i).Value <> "" Then
+            dict(ws.Cells(headerRow, i).Value) = i
+        End If
+    Next i
+
+    Set GetHeaderDict = dict
+End Function
+
+Sub 將進度資料寫入中繼()
+    Dim wbMid As Workbook
+    Dim wsEng As Worksheet, wsMid As Worksheet
+    Dim dictEng As Object, dictMid As Object
+    Dim lastRowEng As Long, lastRowMid As Long
+    Dim i As Long, 編碼 As String
+    Dim matchRow As Range
+
+    Dim 欄位清單 As Variant
+    欄位清單 = Array("設計完成圖", "組裝中", "已轉交")
+
+    ' 嘗試抓取中繼檔（必須先打開）
+    On Error Resume Next
+    Set wbMid = Workbooks("中繼檔.xlsx") ' 請改成實際中繼檔檔名
+    On Error GoTo 0
+
+    If wbMid Is Nothing Then
+        MsgBox "請先開啟『中繼檔.xlsx』，才能更新資料。", vbExclamation
+        Exit Sub
+    End If
+
+    Set wsEng = ThisWorkbook.Sheets("執行中")
+    Set wsMid = wbMid.Sheets("中繼資料")
+
+    ' 取得表頭對應欄位位置
+    Set dictEng = GetHeaderDict(wsEng, 2)
+    Set dictMid = GetHeaderDict(wsMid, 2)
+
+    ' 檢查必要欄位
+    If Not dictEng.exists("編碼") Or Not dictMid.exists("編碼") Then
+        MsgBox "兩邊工作表都必須有『編碼』欄位。", vbCritical
+        Exit Sub
+    End If
+
+    lastRowEng = wsEng.Cells(wsEng.Rows.Count, 1).End(xlUp).Row
+    lastRowMid = wsMid.Cells(wsMid.Rows.Count, 1).End(xlUp).Row
+
+    ' 開始逐列比對編碼並更新資料
+    For i = 3 To lastRowEng
+        編碼 = Trim(wsEng.Cells(i, dictEng("編碼")).Value)
+        If 編碼 = "" Then GoTo 下一筆
+
+        Set matchRow = Nothing
+        Set matchRow = wsMid.Columns(dictMid("編碼")).Find(What:=編碼, LookIn:=xlValues, LookAt:=xlWhole)
+
+        If Not matchRow Is Nothing Then
+            Dim k As Long
+            For k = LBound(欄位清單) To UBound(欄位清單)
+                Dim 欄位名 As String: 欄位名 = 欄位清單(k)
+                If dictEng.exists(欄位名) And dictMid.exists(欄位名) Then
+                    wsMid.Cells(matchRow.Row, dictMid(欄位名)).Value = wsEng.Cells(i, dictEng(欄位名)).Value
+                End If
+            Next k
+        End If
+下一筆:
+    Next i
+
+    MsgBox "中繼資料已更新完成。", vbInformation
+End Sub
