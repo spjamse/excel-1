@@ -1,0 +1,64 @@
+Function GetHeaderDict(ws As Worksheet, headerRow As Long) As Object
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    Dim col As Long, lastCol As Long
+    lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
+    For col = 1 To lastCol
+        If ws.Cells(headerRow, col).Value <> "" Then
+            dict(ws.Cells(headerRow, col).Value) = col
+        End If
+    Next col
+    Set GetHeaderDict = dict
+End Function
+Sub 讀取中繼進度資料()
+    Dim midPath As String, wbMid As Workbook, wsMid As Worksheet
+    Dim dictMid As Object, dictTotal As Object
+    Dim wsTotal As Worksheet
+    Dim lastRowMid As Long, i As Long
+    Dim code As String, matchRow As Range
+
+    ' 設定檔案與工作表
+    midPath = ThisWorkbook.Path & "\中繼檔.xlsx"
+    Set wsTotal = ThisWorkbook.Sheets("總資料")
+    Set dictTotal = GetHeaderDict(wsTotal, 1)
+
+    ' 開啟中繼檔案
+    Set wbMid = Workbooks.Open(midPath)
+    Set wsMid = wbMid.Sheets("中繼資料")
+    Set dictMid = GetHeaderDict(wsMid, 1)
+
+    ' 檢查必要欄位
+    Dim fields As Variant: fields = Array("編碼", "設計完成圖", "組裝中", "已轉交")
+    Dim f As Variant
+    For Each f In fields
+        If Not dictMid.exists(f) Then
+            MsgBox "中繼檔缺少欄位：" & f, vbCritical
+            wbMid.Close False
+            Exit Sub
+        End If
+        If Not dictTotal.exists(f) Then
+            MsgBox "總資料缺少欄位：" & f, vbCritical
+            wbMid.Close False
+            Exit Sub
+        End If
+    Next f
+
+    lastRowMid = wsMid.Cells(wsMid.Rows.Count, dictMid("編碼")).End(xlUp).Row
+
+    ' 遍歷中繼檔的資料
+    For i = 2 To lastRowMid
+        code = Trim(wsMid.Cells(i, dictMid("編碼")).Value)
+        If code = "" Then GoTo 下一筆
+
+        Set matchRow = FindByCode1(wsTotal, "A", code)
+        If Not matchRow Is Nothing Then
+            For Each f In Array("設計完成圖", "組裝中", "已轉交")
+                wsTotal.Cells(matchRow.Row, dictTotal(f)).Value = wsMid.Cells(i, dictMid(f)).Value
+            Next f
+        End If
+下一筆:
+    Next i
+
+    wbMid.Close False
+    MsgBox "已成功從中繼檔回寫工程師進度至總資料。", vbInformation
+End Sub
+
